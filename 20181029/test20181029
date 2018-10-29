@@ -1,0 +1,90 @@
+import requests
+from requests.exceptions import RequestException
+from selenium.common.exceptions import TimeoutException
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+import re
+from config import *
+import pymongo
+client=pymongo.MongoClient(MONGO_URL)
+db=client[MONGO_DB]
+browser = webdriver.PhantomJS(service_args=SERVICE_ARGS)
+wait = WebDriverWait(browser, 10)
+
+def savemongo(result):
+    try:
+        if db[MONGO_TABLE].insert(result):
+            print('存储到数据库成功',result)
+    except Exception:
+        print('存储到数据库失败',result)
+
+
+def get_url(url):
+    try:
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.text
+        return None
+    except RequestException:
+        return None
+
+
+def search():
+    browser.get('http://bbs.taiwan123.cn')
+    submit = wait.until(EC.element_to_be_clickable(
+        (By.CSS_SELECTOR, '#category_191 > table > tbody > tr:nth-child(1) > td:nth-child(1) > dl > dt > a')))
+    submit.click()
+    '''print(browser.page_source)'''
+    submit2=wait.until(EC.element_to_be_clickable(
+        (By.CSS_SELECTOR, '#normalthread_47358 > tr > th > a.s.xst')))
+    submit2.click()
+    print(browser.page_source)
+
+
+
+def parse_url(html):
+    pattern2 = re.compile('<dt>.*?href="(.*?)">(.*?)</a>.*?</td>', re.S)
+    items = re.findall(pattern2, html)
+    for item in items:
+        yield {
+            'url': item[0],
+            'title': item[1]
+        }
+
+def parse_detali_url(html):
+    
+     pattern2=re.compile('(\w\w\w)链接.*?<a href=.*?target="_blank">(.*?)</a>(.*?)<br>', re.S)
+
+     items = re.findall(pattern2, html)
+     for item in items:
+          yield {
+            'name': item[0],
+            'url': item[1],
+              'password': item[2]
+}
+
+
+def parse_title_url(html):
+    pattern2 = re.compile('<a href="(.*?)".*?class="s xst">(.*?)</a>', re.S)
+    items = re.findall(pattern2, html)
+    for item in items:
+        yield {
+            'url': item[0],
+            'title': item[1]
+        }
+
+
+def main():
+    search()
+
+    for item in  parse_detali_url(browser.page_source):
+        print(item)
+        savemongo(item)
+
+
+
+if __name__ == '__main__':
+    main()
