@@ -115,4 +115,4 @@ def get_proxy():
 
 ## 项目参考
 
-[https://github.com/WiseDoge/ProxyPool](https://github.com/WiseDoge/ProxyPool)
+https://github.com/15159867747/python/edit/master/ProxyPool-master
