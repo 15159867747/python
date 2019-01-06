@@ -1,0 +1,139 @@
+from urllib.parse import urlencode
+import requests
+from requests.exceptions import ConnectionError
+import telnetlib
+import re
+import pymongo
+
+SERVICE_ARGS = ['--load-images=false', '--disk-cache=true']
+MONGO_URL = 'localhost'
+MONGO_DB = 'brief_introduction'
+MONGO_TABLE = 'zyjmpf20190107'
+
+base_url = 'https://movie.douban.com/subject_search?'
+headers = {
+    # 'Cookie': 'bid=VDS_Ni3kVqA; __guid=223695111.1432622397164133000.1541864555675.962; __yadk_uid=IjvpMhnwtzFMSysjn29bYe4zeDG7wkn4; ll="118200"; _vwo_uuid_v2=D9947D2ADA04FD988181CB3D8F873A216|fd97bc672c973db05e38a4e6d2ab4710; douban-fav-remind=1; ps=y; push_noty_num=0; push_doumail_num=0; __utmv=30149280.15876; _pk_ref.100001.4cf6=%5B%22%22%2C%22%22%2C1545916954%2C%22http%3A%2F%2Fwww.so.com%2Flink%3Fm%3DaaR17rtf9LYRGjizaDTjj0dtHtWSR9pdEc9hafpDQ%252FKNNarChTVXD%252BIngGhdfOee92287w9DQSVJpkp32q%252FRkzG5IAVQ8U6Rz%22%5D; _pk_ses.100001.4cf6=*; __utma=30149280.60547898.1541864557.1545549052.1545916955.14; __utmc=30149280; __utmz=30149280.1545916955.14.7.utmcsr=so.com|utmccn=(referral)|utmcmd=referral|utmcct=/link; __utmc=223695111; ap_v=0,6.0; ct=y; as="https://movie.douban.com/subject_search?search_text=%E5%BA%B7%E7%86%99%E6%9D%A5%E4%BA%86&cat=1002"; dbcl2="158769945:beSuRC158Hs"; ck=S6N2; __utmt=1; __utmb=30149280.26.10.1545916955; __utma=223695111.454610585.1541864557.1545916955.1545920586.11; __utmb=223695111.0.10.1545920586; __utmz=223695111.1545920586.11.6.utmcsr=douban.com|utmccn=(referral)|utmcmd=referral|utmcct=/accounts/connect/wechat/callback; monitor_count=42; _pk_id.100001.4cf6=3f55a95d913a8ee7.1541864556.11.1545920601.1545555622.',
+    # 2'Cookie': 'bid=VDS_Ni3kVqA; __guid=223695111.1432622397164133000.1541864555675.962; __yadk_uid=IjvpMhnwtzFMSysjn29bYe4zeDG7wkn4; ll="118200"; _vwo_uuid_v2=D9947D2ADA04FD988181CB3D8F873A216|fd97bc672c973db05e38a4e6d2ab4710; douban-fav-remind=1; ps=y; push_noty_num=0; push_doumail_num=0; ct=y; __utmc=30149280; __utmc=223695111; dbcl2="100865820:idZrBCxdcqs"; ck=A2LN; _pk_ref.100001.4cf6=%5B%22%22%2C%22%22%2C1546695989%2C%22https%3A%2F%2Fwww.douban.com%2Faccounts%2Flogin%3Fredir%3Dhttps%3A%2F%2Fmovie.douban.com%2F%26source%3DNone%26login_type%3Dsms%22%5D; _pk_ses.100001.4cf6=*; __utma=30149280.60547898.1541864557.1546693257.1546695989.19; __utmz=30149280.1546695989.19.11.utmcsr=douban.com|utmccn=(referral)|utmcmd=referral|utmcct=/accounts/login; __utma=223695111.454610585.1541864557.1546693257.1546695989.16; __utmb=223695111.0.10.1546695989; __utmz=223695111.1546695989.16.10.utmcsr=douban.com|utmccn=(referral)|utmcmd=referral|utmcct=/accounts/login; __utmt=1; __utmv=30149280.10086; __utmb=30149280.4.10.1546695989; monitor_count=12; _pk_id.100001.4cf6=3f55a95d913a8ee7.1541864556.16.1546696144.1546693373',
+
+    # 'Host': 'movie.douban.com',
+    # Referer': 'https://movie.douban.com/',
+    # 'Upgrade-Insecure-Requests': '1',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/63.0.3239.132 Safari/537.36'
+
+}
+
+proxy_pool_url = 'http://127.0.0.1:5000/get'
+proxy = None
+max_count = 5
+
+
+def get_proxy():
+    try:
+        response = requests.get(proxy_pool_url)
+        if response.status_code == 200:
+            return response.text
+        else:
+            return get_proxy()
+    except ConnectionError:
+        return None
+
+
+def get_html(url, count=1):
+    global proxy
+    print('crawling', url)
+    print('try count', count)
+    if count >= max_count:
+        print('请求次数过多')
+        return None
+    try:
+        if proxy:
+            proxies = {
+                'https': 'https://' + proxy,
+
+                #  'http': 'http://39.137.107.98:80'
+            }
+            response = requests.get(url, headers=headers,proxies=proxies)
+        else:
+            proxy = get_proxy()
+            proxies = {
+                'http': 'http://' + proxy,
+
+                #  'http': 'http://39.137.107.98:80'
+            }
+            response = requests.get(url,headers=headers, proxies=proxies)
+
+        print(response.status_code)
+        if response.status_code == 200:
+            return response.text
+        if response.status_code == 302:
+            print(response.status_code)
+            proxy = get_proxy()
+        if response.status_code == 403:
+            print("403")
+            print(response.status_code)
+            proxy = get_proxy()
+            if proxy:
+                print("use proxy", proxy)
+
+                return get_html(url)
+            else:
+                print('get Proxy failed')
+                return None
+
+    except ConnectionError as e:
+        print('error occurred', e.args)
+        proxy = get_proxy()
+        count += 1
+        return get_html(url)
+
+
+def get_index(keyword):
+    data = {
+        'search_text': keyword
+    }
+    queries = urlencode(data)
+    url = base_url + queries
+    html = get_html(url)
+    print(html)
+    if html:
+        url2 = re.search(
+            '<div class="sc-dnqmqq.*?">.*?<span class="rating_nums">(.*?)</span>.*? class="pl">(.*?)</span>',
+            html, re.S)
+        print(url2)
+
+
+        '''url2 = re.search(
+            '<div class="sc-dnqmqq.*?">.*?<div class="title".*?<a.*?class="title-text">.*?' + keyword + '.*?<span class="rating_nums">(.*?)</span>.*? class="pl">(.*?)</span>',
+            html, re.S)
+       
+        if url2:
+            pf = url2.group(1)
+            num = url2.group(2)
+        else:
+            pf = "null"
+            num = "null"
+
+        douban_pf = {
+            'title': keyword,
+            'pf': pf,
+            'num': num
+        }
+        print(douban_pf)'''
+
+
+
+    '''print(html)'''
+
+
+def main():
+    yum = ['娱乐百分百', '大学生了没', '命运好好玩', '国光帮帮忙', '美食好简单', '爱玩客', 'WTO姐妹会', '康熙来了', 'SS小燕之夜', '2分之一强', '来自星星的事', '综艺大热门',
+           '别让身体不开心', '女人我最大', '上班这党事', '美凤有约', '风水有关系', '旅行应援团', '超级夜总会', '冠军任务', '天才冲冲冲'
+        , '综艺玩很大', '疯神无双', '综艺大集合', '大陆寻奇', '三星报喜'
+        , 'MIT台湾志', '疯狂开心果', '宠物大联萌', '天王猪哥秀'
+        , '美食凤味', '小明星大跟班', '请你跟我这样过', '健康NO.1', '食尚玩家', '最美的歌']
+    for i in range(0, len(yum)):
+        get_index(yum[i])
+
+
+if __name__ == '__main__':
+    main()
